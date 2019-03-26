@@ -19,7 +19,7 @@ var (
 	flagBaseMountPoint = flag.String("m", "/mnt", "Base mount point where to mount partitions")
 	flagDryRun         = flag.Bool("dryrun", false, "Do not actually kexec into the boot config")
 	flagDebug          = flag.Bool("d", false, "Print debug output")
-	flagConfigNo       = flag.Int("config", -1, "Specify the bootconfiguration to boot. It is the order of the menuentries in grub.cfg")
+	flagConfigIdx      = flag.Int("config", 0, "Specify the index of the configuration to boot. The order is determined by the menu entries in the Grub config")
 	flagGrubMode       = flag.Bool("grub", false, "Use GRUB mode, i.e. look for valid Grub/Grub2 configuration in default locations to boot a kernel. GRUB mode ignores -kernel/-initramfs/-cmdline")
 	flagKernelPath     = flag.String("kernel", "", "Specify the path of the kernel to execute. If using -grub, this argument is ignored")
 	flagInitramfsPath  = flag.String("initramfs", "", "Specify the path of the initramfs to load. If using -grub, this argument is ignored")
@@ -73,7 +73,7 @@ func mountByGUID(devices []storage.BlockDev, filesystems []string, guid, baseMou
 // instead.
 // The fourth parameter, `dryrun`, will not boot the found configurations if set
 // to true.
-func BootGrubMode(devices []storage.BlockDev, baseMountpoint string, guid string, dryrun bool, configNo int) error {
+func BootGrubMode(devices []storage.BlockDev, baseMountpoint string, guid string, dryrun bool, configIdx int) error {
 	// get a list of supported file systems for real devices (i.e. skip nodev)
 	debug("Getting list of supported filesystems")
 	filesystems, err := storage.GetSupportedFilesystems()
@@ -117,25 +117,25 @@ func BootGrubMode(devices []storage.BlockDev, baseMountpoint string, guid string
 	for _, mountpoint := range mounted {
 		bootconfigs = append(bootconfigs, ScanGrubConfigs(mountpoint.Path)...)
 	}
+	if len(bootconfigs) == 0 {
+		return fmt.Errorf("No boot configuration found")
+	}
 	log.Printf("Found %d boot configs", len(bootconfigs))
 	for _, cfg := range bootconfigs {
 		debug("%+v", cfg)
 	}
-	if len(bootconfigs) == 0 {
-		return fmt.Errorf("No boot configuration found")
-	}
 	for n, cfg := range bootconfigs {
 		log.Printf("  %d: %s\n", n, cfg.Name)
 	}
-	if configNo > -1 {
+	if configIdx > -1 {
 		for n, cfg := range bootconfigs {
-			if configNo == n {
+			if configIdx == n {
 				if err := cfg.Boot(); err != nil {
 					log.Printf("Failed to boot kernel %s: %v", cfg.Kernel, err)
 				}
 			}
 		}
-		log.Printf("Invalig arg -config %d: there are less then %d bootconfigs available \n", configNo, len(bootconfigs))
+		log.Printf("Invalig arg -config %d: there are Specify the bootconfigurless then %d bootconfigs available \n", configIdx, len(bootconfigs))
 		return nil
 	}
 	if dryrun {
@@ -236,7 +236,7 @@ func main() {
 	// TODO boot from EFI system partitions. See storage.FilterEFISystemPartitions
 
 	if *flagGrubMode {
-		if err := BootGrubMode(devices, *flagBaseMountPoint, *flagDeviceGUID, *flagDryRun, *flagConfigNo); err != nil {
+		if err := BootGrubMode(devices, *flagBaseMountPoint, *flagDeviceGUID, *flagDryRun, *flagConfigIdx); err != nil {
 			log.Fatal(err)
 		}
 	} else if *flagKernelPath != "" {
